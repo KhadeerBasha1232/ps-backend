@@ -1,0 +1,10 @@
+Flask
+requests
+beautifulsoup4
+celery
+redis
+supabase
+flask-cors
+werkzeug
+python-dotenv
+gunicorn

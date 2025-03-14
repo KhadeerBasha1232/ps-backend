@@ -1,0 +1,29 @@
+version: '3.8'
+
+services:
+  web:
+    build: .
+    ports:
+      - "5000:5000"
+    environment:
+      - FLASK_ENV=development
+    depends_on:
+      - redis
+    volumes:
+      - .:/app
+
+  redis:
+    image: "redis:alpine"
+    ports:
+      - "6379:6379"
+
+  celery:
+    build: .
+    command: celery -A app.celery worker --loglevel=info --pool=solo
+    depends_on:
+      - redis
+    volumes:
+      - .:/app
+    environment:
+      - CELERY_BROKER_URL=redis://red-cumqv78gph6c7388hgg0:6379/0
+      - CELERY_RESULT_BACKEND=redis://red-cumqv78gph6c7388hgg0:6379/0
