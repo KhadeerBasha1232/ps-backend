@@ -9,21 +9,18 @@ from supabase import create_client, Client
 from flask_cors import CORS
 from dotenv import load_dotenv
 
-# Load environment variables from .env file
 load_dotenv()
 
 app = Flask(__name__)
 CORS(app)
 
-# Supabase Configuration
 SUPABASE_URL = os.getenv("SUPABASE_URL")
 SUPABASE_KEY = os.getenv("SUPABASE_KEY")
 supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 
-# Celery Configuration
 app.config['broker_url'] = 'redis://red-cumqv78gph6c7388hgg0:6379/0'
 app.config['result_backend'] = 'redis://red-cumqv78gph6c7388hgg0:6379/0'
-app.config['include'] = ['tasks']  # Include the module where the task is defined
+app.config['include'] = ['tasks']
 
 def make_celery(app):
     celery = Celery(app.import_name, broker=app.config['broker_url'])
@@ -32,29 +29,28 @@ def make_celery(app):
 
 celery = make_celery(app)
 
-# Function to fetch jobs from Naukri
 def fetch_naukri_jobs(keyword, location=None, max_pages=1):
     job_list = []
     headers = {
-    "accept": "application/json",
-    "accept-language": "en",
-    "appid": "109",
-    "authorization": "Bearer YOUR_AUTH_TOKEN",  # Replace with a valid token
-    "clientid": "d3skt0p",
-    "content-type": "application/json",
-    "gid": "LOCATION,INDUSTRY,EDUCATION,FAREA_ROLE",
-    "nkparam": "J7d/J9BikyAVwgh3YTbmnfqlKTPC3qFUzlCeZfYcW2BqRMnSq3lHcRupZ8WuD0kH0F3ARutT+sq/x2B6yHnyuw==",  # May need to fetch dynamically
-    "priority": "u=1, i",
-    "sec-ch-ua": "\"Chromium\";v=\"134\", \"Not:A-Brand\";v=\"24\", \"Google Chrome\";v=\"134\"",
-    "sec-ch-ua-mobile": "?0",
-    "sec-ch-ua-platform": "\"Windows\"",
-    "sec-fetch-dest": "empty",
-    "sec-fetch-mode": "cors",
-    "sec-fetch-site": "same-origin",
-    "systemid": "Naukri",
-    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/134.0.0.0 Safari/537.36",
-    "referrerPolicy": "strict-origin-when-cross-origin"
-}
+        "accept": "application/json",
+        "accept-language": "en",
+        "appid": "109",
+        "authorization": "Bearer YOUR_AUTH_TOKEN",
+        "clientid": "d3skt0p",
+        "content-type": "application/json",
+        "gid": "LOCATION,INDUSTRY,EDUCATION,FAREA_ROLE",
+        "nkparam": "J7d/J9BikyAVwgh3YTbmnfqlKTPC3qFUzlCeZfYcW2BqRMnSq3lHcRupZ8WuD0kH0F3ARutT+sq/x2B6yHnyuw==",
+        "priority": "u=1, i",
+        "sec-ch-ua": "\"Chromium\";v=\"134\", \"Not:A-Brand\";v=\"24\", \"Google Chrome\";v=\"134\"",
+        "sec-ch-ua-mobile": "?0",
+        "sec-ch-ua-platform": "\"Windows\"",
+        "sec-fetch-dest": "empty",
+        "sec-fetch-mode": "cors",
+        "sec-fetch-site": "same-origin",
+        "systemid": "Naukri",
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/134.0.0.0 Safari/537.36",
+        "referrerPolicy": "strict-origin-when-cross-origin"
+    }
     for page in range(1, max_pages + 1):
         url = f"https://www.naukri.com/jobapi/v3/search?noOfResults=20&urlType=search_by_keyword&searchType=adv&keyword={keyword}&pageNo={page}&seoKey={keyword}-jobs&src=directSearch"
         if location:
@@ -86,8 +82,6 @@ def parse_naukri_jobs(jobs, location):
         })
     return job_list
 
-
-# Function to fetch jobs from LinkedIn
 def fetch_linkedin_jobs(keyword, location):
     jobs = []
     headers = {"User-Agent": "Mozilla/5.0"}
@@ -145,7 +139,6 @@ def fetch_job_description(job_id):
         return job_description_div.get_text(separator="\n").strip() if job_description_div else "N/A"
     return "N/A"
 
-# Store jobs in Supabase
 def store_jobs_in_supabase(jobs): 
     print(jobs)
     for job in jobs:
@@ -155,7 +148,7 @@ def store_jobs_in_supabase(jobs):
 
 @app.route('/fetch-jobs', methods=['GET'])
 def manual_fetch_jobs():
-    from tasks import fetch_and_store_jobs  # Import the task here
+    from tasks import fetch_and_store_jobs
     keyword = request.args.get('keyword')
     location = request.args.get('location')
     fetch_and_store_jobs.delay(keyword, location)
@@ -165,16 +158,14 @@ def manual_fetch_jobs():
 def get_jobs():
     query = supabase.table("jobs").select("*")
 
-    # Extract query parameters
     keyword = request.args.get('keyword')
     location = request.args.get('location')
     company = request.args.get('company')
     technology = request.args.get('technology')
-    source = request.args.get('source')  # New filter for job source
-    limit = request.args.get('limit', default=10, type=int)  # Number of jobs per request
-    offset = request.args.get('offset', default=0, type=int)  # Pagination offset
+    source = request.args.get('source')
+    limit = request.args.get('limit', default=10, type=int)
+    offset = request.args.get('offset', default=0, type=int)
 
-    # Apply filters if provided
     if keyword:
         query = query.ilike("title", f"%{keyword}%")
     if location:
@@ -184,19 +175,16 @@ def get_jobs():
     if technology:
         query = query.ilike("job_description", f"%{technology}%")
     if source:
-        query = query.ilike("source", f"%{source}%")  # Filtering jobs by source
+        query = query.ilike("source", f"%{source}%")
 
-    # Apply pagination
     query = query.range(offset, offset + limit - 1)  
 
     response = query.execute()
     return jsonify({
         "jobs": response.data,
-        "next_offset": offset + limit,  # For fetching the next set of results
-        "has_more": len(response.data) == limit  # If true, more data is available
+        "next_offset": offset + limit,
+        "has_more": len(response.data) == limit
     })
-
-
 
 if __name__ == '__main__':
     app.run(debug=True)
